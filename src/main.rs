@@ -668,6 +668,96 @@ fn _main_07_2() {
     println!("{}", sum);
 }
 
+fn _main_08_1() {
+    let mut input = io::stdin().bytes().map(Result::unwrap);
+    let (_, my, mx, grid) = (0..)
+        .try_fold(
+            (0, 0, 0, HashMap::<u8, Vec<(i64, i64)>>::new()),
+            |(x, y, mx, mut grid), _| {
+                let b = input.next();
+                match b {
+                    None => ControlFlow::Break((x, y, mx, grid)),
+                    Some(b'\n') => ControlFlow::Continue((0, y + 1, x, grid)),
+                    Some(b'.') => ControlFlow::Continue((x + 1, y, mx, grid)),
+                    Some(b) => {
+                        grid.entry(b)
+                            .and_modify(|e| e.push((x, y)))
+                            .or_insert(vec![(x, y)]);
+                        ControlFlow::Continue((x + 1, y, mx, grid))
+                    }
+                }
+            },
+        )
+        .break_value()
+        .unwrap();
+    let antinodes = grid.iter().fold(HashSet::new(), |mut set, (_, v)| {
+        v.iter()
+            .flat_map(|(x0, y0)| v.iter().map(|(x1, y1)| ((*x0, *y0), (*x1, *y1))))
+            .filter(|((x0, y0), (x1, y1))| x0 != x1 || y0 != y1)
+            .for_each(|((x0, y0), (x1, y1))| {
+                let (dx, dy) = (x0 - x1, y0 - y1);
+                vec![(x0 + dx, y0 + dy), (x1 - dx, y1 - dy)]
+                    .iter()
+                    .filter(|(xa, ya)| *xa >= 0 && *xa < mx && *ya >= 0 && *ya < my)
+                    .for_each(|loc| {
+                        set.insert(*loc);
+                    });
+            });
+        set
+    });
+    println!("{}", antinodes.len());
+}
+
+fn _main_08_2() {
+    let mut input = io::stdin().bytes().map(Result::unwrap);
+    let (_, my, mx, grid) = (0..)
+        .try_fold(
+            (0, 0, 0, HashMap::<u8, Vec<(i64, i64)>>::new()),
+            |(x, y, mx, mut grid), _| {
+                let b = input.next();
+                match b {
+                    None => ControlFlow::Break((x, y, mx, grid)),
+                    Some(b'\n') => ControlFlow::Continue((0, y + 1, x, grid)),
+                    Some(b'.') | Some(b'#') => ControlFlow::Continue((x + 1, y, mx, grid)),
+                    Some(b) => {
+                        grid.entry(b)
+                            .and_modify(|e| e.push((x, y)))
+                            .or_insert(vec![(x, y)]);
+                        ControlFlow::Continue((x + 1, y, mx, grid))
+                    }
+                }
+            },
+        )
+        .break_value()
+        .unwrap();
+    let antinodes = grid.iter().fold(HashSet::new(), |mut set, (_, v)| {
+        v.iter()
+            .flat_map(|(x0, y0)| v.iter().map(|(x1, y1)| ((*x0, *y0), (*x1, *y1))))
+            .filter(|((x0, y0), (x1, y1))| x0 <= x1 && (x0 != x1 || y0 != y1))
+            .for_each(|((x0, y0), (x1, y1))| {
+                let (dx, dy) = (x0 - x1, y0 - y1);
+                let f = |c: i64, d: i64, m: i64| {
+                    let min = c % d;
+                    let cnt = (m - min - 1) / d;
+                    (cnt.abs() + 1, cnt.signum(), c / d)
+                };
+                let (cnt, sgn, off) = if dx != 0 {
+                    f(x0, dx, mx)
+                } else {
+                    f(y0, dy, my)
+                };
+                for i in 0..cnt {
+                    let (x, y) = (x0 + dx * ((off + i) * sgn), y0 + dy * ((off + i) * sgn));
+                    if y >= 0 && y < my {
+                        set.insert((x, y));
+                    }
+                }
+            });
+        set
+    });
+    println!("{}", antinodes.len());
+}
+
 fn main() {
-    _main_07_2();
+    _main_08_2();
 }
