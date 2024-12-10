@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io;
-use std::io::Read;
+use std::io::{BufRead, Read};
 use std::ops::ControlFlow;
 
 fn _main_01_1() {
@@ -758,6 +758,256 @@ fn _main_08_2() {
     println!("{}", antinodes.len());
 }
 
-fn main() {
-    _main_08_2();
+fn _main_09_1() {
+    let mut input = String::new();
+    let _ = io::stdin().lock().read_line(&mut input);
+    let input = input.strip_suffix('\n').unwrap();
+    let (_, _, chunks, _) = input.chars().fold(
+        (false, 0_isize, BTreeMap::new(), 0_isize),
+        |(is_free, p, mut chunks, id), sz| {
+            let sz = sz.to_digit(10).unwrap() as isize;
+            chunks.insert(
+                p,
+                (
+                    if is_free {
+                        -1_isize
+                    } else {
+                        id
+                    },
+                    sz,
+                ),
+            );
+            (!is_free, p + sz, chunks, if is_free { id } else { id + 1 })
+        },
+    );
+//    println!("{:?}", chunks);
+    let mut rev_blocks = chunks
+        .iter()
+        .filter(|(_, (id, _))| *id >= 0)
+        .flat_map(|(_, (id, sz))| vec![*id; *sz as usize].into_iter())
+        .rev();
+    let sum = (0..chunks
+        .iter()
+        .filter(|(_, (fd, _))| *fd >= 0)
+        .map(|(_, (_, sz))| *sz)
+        .sum::<isize>())
+        .fold(0, |sum, i| {
+            sum + i * {
+                let (_, (id, _)) = chunks
+                    .iter()
+                    .take_while(|(p, _)| i >= **p as isize)
+                    .last()
+                    .unwrap();
+                let n = if *id >= 0 {
+                    *id as isize
+                } else {
+                    rev_blocks.next().unwrap()
+                };
+                n
+            }
+        });
+    println!("{}", sum);
 }
+
+fn _main_09_2() {
+    let mut input = String::new();
+    let _ = io::stdin().lock().read_line(&mut input);
+    let input = input.strip_suffix('\n').unwrap();
+    let (_, _, mut chunks, _) = input.chars().fold(
+        (false, 0_isize, BTreeMap::new(), 0_isize),
+        |(is_free, p, mut chunks, mut id), sz| {
+            let sz = sz.to_digit(10).unwrap() as isize;
+            chunks.insert(
+                p,
+                (
+                    if is_free {
+                        -1_isize
+                    } else {
+                        id += 1;
+                        id - 1
+                    },
+                    sz,
+                ),
+            );
+            (!is_free, p + sz, chunks, id)
+        },
+    );
+    let mut rev_files = chunks.iter().filter(|(_, (id, _))| *id >= 0)
+        .map(|(p, (id, sz))| (p.clone(), (id.clone(), sz.clone()))).
+        collect::<Vec<_>>();
+    rev_files.reverse();
+    let (sum, _) = (0..chunks
+        .iter()
+        .map(|(_, (_, sz))| *sz)
+        .sum::<isize>())
+        .fold((0, vec![]), |(sum, mut f), i| {
+            (sum + i * {
+                let (p, (id, sz)) = chunks
+                    .iter()
+                    .take_while(|(p, (_, sz))| i >= **p as isize || *sz == 0)
+                    .last()
+                    .unwrap();
+                let (p, id, sz) = (p.clone(), id.clone(), sz.clone());
+                let n = if id >= 0 {
+                    id as isize
+                } else {
+                    let o = i - p;
+                    let residual = sz - o;
+                    if f.len() > 0 {
+                        f.pop().unwrap()
+                    } else {
+                        if let Some((off, (p, (id, sz)))) = rev_files.iter().enumerate().find(|(_, (p, (_, sz)))| *p > i && *sz <= residual) {
+                            let (p, id, sz) = (p.clone(), id.clone(), sz.clone());
+                            f = vec![id; sz as usize - 1];
+                            let (_, sz) = chunks.remove(&p).unwrap();
+                            rev_files.remove(off);
+                            chunks.insert(p, (-1, sz));
+                            id
+                        } else {
+                            0
+                        }
+                    }
+                };
+                n
+            }, f)
+        });
+    println!("{}", sum);
+}
+
+fn _main_10_1() {
+    let mut g = HashMap::new();
+    let (g, mr, mc) =
+        io::stdin()
+            .lock()
+            .lines()
+            .map(Result::unwrap)
+            .fold((&mut g, 0, 0), |(g, r, mc), l| {
+                let (g, mc) = l.chars().fold((g, 0), |(g, c), ch| {
+                    g.insert((r, c), ch);
+                    (g, c + 1)
+                });
+                (g, r + 1, mc)
+            });
+    let o = g
+        .iter()
+        .filter(|(_, ch)| **ch == '0')
+        .map(|(p, _)| *p)
+        .collect::<Vec<_>>();
+    let next = |p: &(i32, i32)| {
+        let h = (g.get(&p).unwrap().to_digit(10).unwrap() + 1)
+            .to_string()
+            .chars()
+            .next()
+            .unwrap();
+        (-1_i32..=1)
+            .flat_map(|r| (-1_i32..=1).map(move |c| (r, c)))
+            .filter(|(r, c)| (*r).abs() != (*c).abs())
+            .map(|(r, c)| (p.0 + r, p.1 + c))
+            .filter(|(r, c)| {
+                *r >= 0 && *r < mr && *c >= 0 && *c < mc && *g.get(&(*r, *c)).unwrap() == h
+            })
+            .collect::<HashSet<_>>()
+    };
+    let sum = o.iter().fold(0, |sum, o| {
+        let mut ts = HashSet::new();
+        ts.insert(vec![*o]);
+        let ts = (0..9).fold(ts, |ts, _| {
+            ts.iter()
+                .flat_map(|t| {
+                    let p1 = next(t.last().unwrap());
+                    let ts = p1
+                        .iter()
+                        .map(|p| {
+                            let mut nt = t.clone();
+                            nt.push(*p);
+                            nt
+                        })
+                        .collect::<HashSet<_>>();
+                    ts
+                })
+                .collect::<HashSet<_>>()
+        });
+        let cnt = ts
+            .iter()
+            .map(|v| v.last().unwrap().clone())
+            .collect::<HashSet<_>>()
+            .len();
+        sum + cnt
+    });
+    println!("{}", sum);
+}
+
+fn _main_10_2() {
+    let mut g = HashMap::new();
+    let (g, mr, mc) =
+        io::stdin()
+            .lock()
+            .lines()
+            .map(Result::unwrap)
+            .fold((&mut g, 0, 0), |(g, r, mc), l| {
+                let (g, mc) = l.chars().fold((g, 0), |(g, c), ch| {
+                    g.insert((r, c), ch);
+                    (g, c + 1)
+                });
+                (g, r + 1, mc)
+            });
+    let o = g
+        .iter()
+        .filter(|(_, ch)| **ch == '0')
+        .map(|(p, _)| *p)
+        .collect::<Vec<_>>();
+    let next = |p: &(i32, i32)| {
+        let h = (g.get(&p).unwrap().to_digit(10).unwrap() + 1)
+            .to_string()
+            .chars()
+            .next()
+            .unwrap();
+        (-1_i32..=1)
+            .flat_map(|r| (-1_i32..=1).map(move |c| (r, c)))
+            .filter(|(r, c)| (*r).abs() != (*c).abs())
+            .map(|(r, c)| (p.0 + r, p.1 + c))
+            .filter(|(r, c)| {
+                *r >= 0 && *r < mr && *c >= 0 && *c < mc && *g.get(&(*r, *c)).unwrap() == h
+            })
+            .collect::<HashSet<_>>()
+    };
+    let sum = o.iter().fold(0, |sum, o| {
+        let mut ts = HashSet::new();
+        ts.insert(vec![*o]);
+        let ts = (0..9).fold(ts, |ts, _| {
+            ts.iter()
+                .flat_map(|t| {
+                    let p1 = next(t.last().unwrap());
+                    let ts = p1
+                        .iter()
+                        .map(|p| {
+                            let mut nt = t.clone();
+                            nt.push(*p);
+                            nt
+                        })
+                        .collect::<HashSet<_>>();
+                    ts
+                })
+                .collect::<HashSet<_>>()
+        });
+        let cnt = ts.len();
+        sum + cnt
+    });
+    println!("{}", sum);
+}
+
+fn main() {
+    _main_09_2();
+    //gpu_main();
+}
+
+// GPU shader support
+//mod day01;
+
+// fn gpu_main() {
+//     let mut input = Vec::new();
+//     io::stdin().read_to_end(&mut input).expect("Failed to read stdin");
+//     let (dist, freq_score) = day01::solve_day01(&input);
+//     println!("Total distance: {}", dist);
+//     println!("Similarity score: {}", freq_score);
+// }
