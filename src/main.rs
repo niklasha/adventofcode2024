@@ -1,3 +1,4 @@
+use std::cmp::{max, min};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io;
 use std::io::{BufRead, Read};
@@ -1244,13 +1245,13 @@ fn _main_12_2() {
                     if last_below != region || last_above == region {
                         if let Some(region) = region {
                             rv[*region].1 += 1;
-//                            println!("Adding horizontal above {:?} for {}", rc, region);
+                            //                            println!("Adding horizontal above {:?} for {}", rc, region);
                         }
                     }
                     if last_above != above || last_below == above {
                         if let Some(above) = above {
                             rv[*above].1 += 1;
-//                            println!("Adding horizontal below {:?} for {}", above_rc, above);
+                            //                            println!("Adding horizontal below {:?} for {}", above_rc, above);
                         }
                     }
                 }
@@ -1273,13 +1274,13 @@ fn _main_12_2() {
                     if last_right[c as usize] != region || last_left[c as usize] == region {
                         if let Some(region) = region {
                             rv[*region].1 += 1;
-  //                          println!("Adding vertical left of {:?} for {}", rc, region);
+                            //                          println!("Adding vertical left of {:?} for {}", rc, region);
                         }
                     }
                     if last_left[c as usize] != left || last_right[c as usize] == left {
                         if let Some(left) = left {
                             rv[*left].1 += 1;
-  //                          println!("Adding vertical right of {:?} for {}", left_rc, left);
+                            //                          println!("Adding vertical right of {:?} for {}", left_rc, left);
                         }
                     }
                 }
@@ -1538,7 +1539,7 @@ fn _main_14_2() {
         if entropy(&v, mx, my) < min {
             min = entropy(&v, mx, my);
             guess = Some(i);
-//            print(&v, mx, my);
+            //            print(&v, mx, my);
         }
         v.into_iter()
             .map(|((x, y), (vx, vy))| (((x + vx + mx) % mx, (y + vy + my) % my), (vx, vy)))
@@ -1547,8 +1548,233 @@ fn _main_14_2() {
     println!("{}", guess.unwrap());
 }
 
+fn _main_15_1() {
+    let (_, g, _, _, robot, moves) = io::stdin().lines().map(Result::unwrap).fold(
+        (0, HashMap::new(), 0usize, 0, None, vec![]),
+        |(phase, mut g, r, c, mut robot, mut moves), l| {
+            if l.is_empty() {
+                (1, g, r, c, robot, moves)
+            } else {
+                if phase == 0 {
+                    l.chars()
+                        .enumerate()
+                        .filter(|(c, ch)| match *ch {
+                            '.' => false,
+                            '@' => {
+                                robot = Some((r, *c));
+                                false
+                            }
+                            _ => true,
+                        })
+                        .for_each(|(c, ch)| {
+                            g.insert((r, c), ch);
+                        });
+                    (phase, g, r + 1, l.len(), robot, moves)
+                } else {
+                    moves.extend(l.chars());
+                    (phase, g, r, c, robot, moves)
+                }
+            }
+        },
+    );
+    let (g, _) = moves
+        .into_iter()
+        .fold((g, robot.unwrap()), |(mut g, (r, c)), m| {
+            let mut push = |(dr, dc)| -> (usize, usize) {
+                let (or, oc) = (((r as isize) + dr) as usize, ((c as isize) + dc) as usize);
+                let (mut br, mut bc) = (or, oc);
+                loop {
+                    match g.get(&(br, bc)).as_deref() {
+                        Some('O') => {
+                            (br, bc) =
+                                (((br as isize) + dr) as usize, ((bc as isize) + dc) as usize)
+                        }
+                        Some('#') => return (r, c),
+                        None => {
+                            if (br, bc) != (or, c) {
+                                g.insert((br, bc), 'O');
+                                g.remove(&(or, oc));
+                            }
+                            return (or, oc);
+                        }
+                        _ => panic!(),
+                    }
+                }
+            };
+            let p = match m {
+                '<' => push((0, -1)),
+                '>' => push((0, 1)),
+                '^' => push((-1, 0)),
+                'v' => push((1, 0)),
+                _ => panic!(),
+            };
+            (g, p)
+        });
+    let sum = g.into_iter().fold(
+        0,
+        |sum, ((r, c), ch)| if ch == 'O' { sum + (r * 100) + c } else { sum },
+    );
+    println!("{}", sum);
+}
+
+fn _main_15_2() {
+    let (_, g, _, _, robot, moves) = io::stdin().lines().map(Result::unwrap).fold(
+        (0, HashMap::new(), 0usize, 0, None, vec![]),
+        |(phase, mut g, r, c, mut robot, mut moves), l| {
+            if l.is_empty() {
+                (1, g, r, c, robot, moves)
+            } else {
+                if phase == 0 {
+                    l.chars()
+                        .enumerate()
+                        .map(|(c, ch)| (c * 2, ch))
+                        .filter(|(c, ch)| match *ch {
+                            '.' => false,
+                            '@' => {
+                                robot = Some((r, *c));
+                                false
+                            }
+                            _ => true,
+                        })
+                        .for_each(|(c, ch)| {
+                            if ch == 'O' {
+                                g.insert((r, c), '[');
+                                g.insert((r, c + 1), ']');
+                            } else {
+                                g.insert((r, c), ch);
+                                g.insert((r, c + 1), ch);
+                            }
+                        });
+                    (phase, g, r + 1, l.len() * 2, robot, moves)
+                } else {
+                    moves.extend(l.chars());
+                    (phase, g, r, c, robot, moves)
+                }
+            }
+        },
+    );
+    fn _print(g: &HashMap<(usize, usize), char>, mr: usize, mc: usize) {
+        for r in 0..mr {
+            println!(
+                "{}",
+                (0..mc)
+                    .map(|c| g.get(&(r, c)).unwrap_or(&'.'))
+                    .collect::<String>()
+            )
+        }
+    }
+    let (g, _) = moves
+        .into_iter()
+        .fold((g, robot.unwrap()), |(mut g, (r, c)), m| {
+            //_print(&g, mr, mc);
+            //println!();
+            let mut push = |(dr, dc)| -> (usize, usize) {
+                let (or, oc) = (((r as isize) + dr) as usize, ((c as isize) + dc) as usize);
+                let (mut br, mut bc) = (or, oc);
+                if dr == 0 {
+                    loop {
+                        match g.get(&(br, bc)).as_deref() {
+                            Some('[') | Some(']') => bc = ((bc as isize) + dc) as usize,
+                            Some('#') => return (r, c),
+                            None => {
+                                if (br, bc) != (or, oc) {
+                                    let sc = ((oc as isize) + dc) as usize;
+                                    for c in min(bc, sc)..=max(bc, sc) {
+                                        g.insert(
+                                            (br, c),
+                                            match g.get(&(br, c)).as_deref() {
+                                                Some('[') => ']',
+                                                Some(']') => '[',
+                                                None => {
+                                                    if dc < 0 {
+                                                        '['
+                                                    } else {
+                                                        ']'
+                                                    }
+                                                }
+                                                _ => {
+                                                    panic!();
+                                                }
+                                            },
+                                        );
+                                    }
+                                    g.remove(&(or, oc));
+                                }
+                                return (or, oc);
+                            }
+                            _ => {
+                                panic!();
+                            }
+                        }
+                    }
+                } else {
+                    let mut bcs = HashSet::new();
+                    bcs.insert(bc);
+                    let mut pcs = HashMap::new();
+                    while !bcs.is_empty() {
+                        let mut nbcs = HashSet::new();
+                        for &bc in &bcs {
+                            match g.get(&(br, bc)).as_deref() {
+                                Some('[') => {
+                                    nbcs.insert(bc);
+                                    nbcs.insert(bc + 1);
+                                }
+                                Some(']') => {
+                                    nbcs.insert(bc);
+                                    nbcs.insert(bc - 1);
+                                }
+                                Some('#') => return (r, c),
+                                None => {}
+                                _ => {
+                                    panic!();
+                                }
+                            }
+                        }
+                        if bcs.len() > 1 {
+                            pcs.insert(br, bcs);
+                        }
+                        br = ((br as isize) + dr) as usize;
+                        bcs = nbcs;
+                    }
+                    if br != or {
+                        let mut r = br;
+                        while r != or {
+                            let nr = (r as isize - dr) as usize;
+                            for bc in pcs.get(&r).unwrap_or(&HashSet::new()) {
+                                g.insert((r, *bc), *g.get(&(nr, *bc)).unwrap());
+                                g.remove(&(nr, *bc));
+                            }
+                            r = nr;
+                        }
+                    }
+                    (or, oc)
+                }
+            };
+            let p = match m {
+                '<' => push((0, -1)),
+                '>' => push((0, 1)),
+                '^' => push((-1, 0)),
+                'v' => push((1, 0)),
+                _ => panic!(),
+            };
+            (g, p)
+        });
+    //_print(&g, mr, mc);
+    let sum = g.into_iter().fold(
+        0,
+        |sum, ((r, c), ch)| {
+            if ch == '[' {
+                sum + r * 100 + c
+            } else {
+                sum
+            }
+        },
+    );
+    println!("{}", sum);
+}
+
 fn main() {
-    _main_14_2();
+    _main_15_2();
     //gpu_main();
 }
 
